@@ -111,7 +111,7 @@ def get_instances(context):
 @entry.command()
 @click.pass_context
 @click.option('-i', '--instance-id', 'instance_id',type = str, required = True, help = "Instance to start")
-@click.confirmation_option(prompt=f'Are you sure you want to start the instance?')
+@click.confirmation_option(prompt='Are you sure you want to start the instance?')
 def start_instance(context, instance_id):
     ec2_client = context.obj['ec2_client']
     if is_exist(ec2_client, instance_id):
@@ -121,7 +121,7 @@ def start_instance(context, instance_id):
 @entry.command()
 @click.pass_context
 @click.option('-i', '--instance-id', 'instance_id',type = str, required = True, help = "Instance to stop")
-@click.confirmation_option(prompt=f'Are you sure you want to stop the instance?')
+@click.confirmation_option(prompt='Are you sure you want to stop the instance?')
 def stop_instance(context, instance_id):
     ec2_client = context.obj['ec2_client']
     if is_exist(ec2_client, instance_id):
@@ -131,7 +131,7 @@ def stop_instance(context, instance_id):
 @entry.command()
 @click.pass_context
 @click.option('-i', '--instance-id', 'instance_id',type = str, required = True, help = "Instance to terminate")
-@click.confirmation_option(prompt=f'Are you sure you want to terminate the instance?')
+@click.confirmation_option(prompt='Are you sure you want to terminate the instance?')
 def terminate_instance(context, instance_id):
     ec2_client = context.obj['ec2_client']
     if is_exist(ec2_client, instance_id):
