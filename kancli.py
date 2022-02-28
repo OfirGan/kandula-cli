@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-from os import abort
+import logging
+import logging.handlers
 import click
 import boto3
 from boto3 import client
+from tabulate import tabulate
 
 def get_instance_value_by_key(instance, key: str):
     if key in instance:
@@ -74,69 +76,105 @@ def get_instances_dict_list(ec2_client):
 
         return instance_data_dict_list
 
-def is_exist(ec2_client, instance_id):
-    is_exist = False
+def get_exception_error(ex):
+    return str(ex).split(':', 1)[-1].lstrip()
 
-    instance_data_dict_list = get_instances_dict_list(ec2_client)
+def init_logger(debug_enabled: bool):
+    logging.getLogger('boto3').setLevel(logging.CRITICAL)
+    logging.getLogger('botocore').setLevel(logging.CRITICAL)
+    logging.getLogger('s3transfer').setLevel(logging.CRITICAL)
+    logging.getLogger('urllib3').setLevel(logging.CRITICAL)
+    
+    logging.basicConfig(level=logging.DEBUG,handlers=[])
+    logging_level = logging.DEBUG if debug_enabled else logging.ERROR
 
-    for instance_dict in instance_data_dict_list:
-        if instance_dict['Id'] == instance_id:
-            is_exist = True
-
-    if not is_exist:
-        click.echo("Instance ID not found")
-        
-    return is_exist
-
+    # DEBUG \ ERROR Log To stdout
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging_level)
+    stream_handler.setFormatter(logging.Formatter('%(message)s'))
+    
+    # DEBUG Log To File 
+    file_handler = logging.handlers.TimedRotatingFileHandler(filename='kandula.log', when='midnight', backupCount=10)
+    file_handler.setLevel(logging_level)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(filename)s [%(levelname)s]: %(message)s'))
+    
+    logger = logging.getLogger()
+    logger.addHandler(stream_handler)
+    logger.addHandler(file_handler)
+    return logger
+    
 @click.group()
 @click.option('--debug/--no-debug', is_flag=True, default=False)
 @click.pass_context
 def entry(context, debug):
-    click.echo('Welcome To kancli' )
-    context.obj['DEBUG'] = debug
+    click.secho('Welcome to kancli \n', fg="cyan", bold=True, underline=True)
     context.obj['ec2_client'] = boto3.client('ec2')
+    context.obj['logger'] = init_logger(debug)
 
 @entry.command()
 @click.pass_context
 def get_instances(context):
-    instance_data_dict_list = get_instances_dict_list(context.obj['ec2_client'])
-    for instance_dict in instance_data_dict_list:
-        click.echo("---")
-        click.echo(f"Instance ID: {instance_dict['Id']}")
-        click.echo(f"Instance State: {instance_dict['State']}")
+    context.obj['logger'].info("get_instances() - Started")
+    try:
+        headers_list = ["Id", "Region", "Type", "State", "PrivateIpAddress", "PublicIpAddress"]
+        table_data = []
+        instance_data_dict_list = get_instances_dict_list(context.obj['ec2_client'])
+        for instance_dict in instance_data_dict_list:
+            instance_row = []
+            for header in headers_list:
+                instance_row.append(instance_dict[header])
+            table_data.append(instance_row)
 
-    click.echo("---")
-    pass
+        click.echo(tabulate(table_data, headers = headers_list))
+        context.obj['logger'].info("get_instances() - Finished Successfully")
+    except Exception as ex:
+        context.obj['logger'].error(get_exception_error(ex))
+        context.obj['logger'].info("get_instances() - Finished with Error")
 
 @entry.command()
 @click.pass_context
 @click.option('-i', '--instance-id', 'instance_id',type = str, required = True, help = "Instance to start")
 @click.confirmation_option(prompt='Are you sure you want to start the instance?')
 def start_instance(context, instance_id):
+    context.obj['logger'].info("start_instance() - Started")
     ec2_client = context.obj['ec2_client']
-    if is_exist(ec2_client, instance_id):
+    try:
         ec2_client.start_instances(InstanceIds=[instance_id])
-    pass
+        context.obj['logger'].info(f"{instance_id} - Started")
+        context.obj['logger'].info("start_instance() - Finished Successfully")
+    except Exception as ex:
+        context.obj['logger'].error(get_exception_error(ex))
+        context.obj['logger'].info("start_instance() - Finished with Error")
 
 @entry.command()
 @click.pass_context
 @click.option('-i', '--instance-id', 'instance_id',type = str, required = True, help = "Instance to stop")
 @click.confirmation_option(prompt='Are you sure you want to stop the instance?')
 def stop_instance(context, instance_id):
+    context.obj['logger'].info("stop_instance() - Started")
     ec2_client = context.obj['ec2_client']
-    if is_exist(ec2_client, instance_id):
+    try:
         ec2_client.stop_instances(InstanceIds=[instance_id])
-    pass
+        context.obj['logger'].info(f"{instance_id} - Stopped")
+        context.obj['logger'].info("stop_instance() - Finished Successfully")
+    except Exception as ex:
+        context.obj['logger'].error(get_exception_error(ex))
+        context.obj['logger'].info("stop_instance() - Finished with Error")
 
 @entry.command()
 @click.pass_context
 @click.option('-i', '--instance-id', 'instance_id',type = str, required = True, help = "Instance to terminate")
 @click.confirmation_option(prompt='Are you sure you want to terminate the instance?')
 def terminate_instance(context, instance_id):
+    context.obj['logger'].info("terminate_instance() - Started")
     ec2_client = context.obj['ec2_client']
-    if is_exist(ec2_client, instance_id):
+    try:
         ec2_client.terminate_instances(InstanceIds=[instance_id])
-    pass
+        context.obj['logger'].info(f"{instance_id} - Terminated")
+        context.obj['logger'].info("terminate_instance() - Finished Successfully")
+    except Exception as ex:
+        context.obj['logger'].error(get_exception_error(ex))
+        context.obj['logger'].info("terminate_instance() - Finished with Error")
 
 if __name__ == '__main__':
-    entry(obj={})
+        entry(obj = {})
